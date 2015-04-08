@@ -4,6 +4,29 @@ Simple AVR operating system.
 Introduction
 ============
 
+Stedos is designed as a simple 'operating system' suitable for AVRs.  It has the following design goals:
+
+* Minimal overhead -- performance can be critical on embedded systems.
+* No object files supplied or required to be compiled.
+* Everything defined statically -- `malloc()` and `free()` shouldn't be used.
+* Easy to install and use -- a single header file
+
+Stedos provides the following blocks:
+
+* An event queue that handles event scheduling and processing.
+* A class abstraction for port and pin access.
+* Some classes useful for defining arrays, fifos, linked lists,...
+
+Each block is documented in the sections that follows:
+
+Documentation
+=============
+
+Event Queue
+-----------
+
+
+
 In my first job after university, I was an AVR programmer.  I really love AVRs for the following reasons:
 
 * Clear and well written datasheets
