@@ -4,12 +4,17 @@
 #include <avr/interrupt.h>
 #include "../stedos.h"
 
-/* Create some data structures for sending / receiving data */
-stedos::FIFO<char, 32> receive_buffer;
-stedos::FIFO<char, 32> transmit_buffer;
-
 /* Create process queue */
 stedos::EventProcessor<32> queue;
+
+/* Create some data structures for sending / receiving data */
+stedos::FIFO<char, 32> receive_buffer;
+stedos::FIFO<char, 50> transmit_buffer;
+
+struct ev { uint8_t flag; uint8_t data; };
+
+stedos::FIFO<ev, 8> q;
+
 
 void transmit_char(const char& c)
 {
@@ -49,7 +54,9 @@ void queue_empty(void* data)
 /* Hook into the interrupts */
 ISR(USART_RX_vect)
 {
-	queue.queueEvent(data_received, (void*) UDR0);
+	//char c = UDR0;
+	//queue.queueEvent(data_received, UDR0);
+	q.push({3, UDR0});
 }
 
 ISR(USART_UDRE_vect)

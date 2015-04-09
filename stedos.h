@@ -34,8 +34,7 @@
         /* MASK is used if SIZE if a multiple of 2
            it can be used to limit the index by an &=
            operation.  */
-        const uint8_t MASK = (SIZE - 1);
-
+        static const uint8_t MASK = (SIZE - 1);
 
     public:
         /** Adds an item to the end of the queue */
@@ -65,6 +64,12 @@
          */
         void inc(uint8_t& v)
         {
+            //v += 1;
+
+            //asm ( "lds %0, %1" : "=r" (v) : "" (&v));
+            /* Force the compiler to put v into a local register
+               generates lds r30, 0x0100 instead of ldi r26, 01, ldi r27, 00, ld r30, X */
+            asm volatile("" : "=b" (v) : "0" (v));
             v += 1;
 
             if (SIZE == 256)
