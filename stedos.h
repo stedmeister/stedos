@@ -93,6 +93,35 @@
     };
 
 
+    /* Array - handles an array of items */
+
+    template<typename T, int SIZE>
+    class Array
+    {
+        static_assert(SIZE > 0, "");
+        static_assert(SIZE <= 256, "");
+
+    public:
+        /* Adds an item to the back of the array */
+        void     append(const T& v) { array[length] = v; length += 1; }
+
+        /* Adds an item at the specified index */
+        void     insert(const T& v, uint8_t idx=0) { /* Not implemented */ }
+
+        /* Removes an item at the specified index */
+        const T& remove(uint8_t idx) { /* Not implemented */  }
+
+        /* Removes an item at the back of the array */
+        const T& pop()              { length -= 1; return array[length]; }
+
+        const T& operator[] (uint8_t idx) { return array[idx]; }
+
+    private:
+        T array[SIZE];
+        uint8_t length;
+    };
+
+
 
     /**********************************************************
      *
@@ -102,15 +131,21 @@
 
 
     /* Define a function prototype to use for structures */
-    typedef void (*event_func_t) (void* data);
+    typedef void (*event_func_t) (uintptr_t data);
 
     /* Define a struct used to store a function pointer
        and the user data associated with it
     */
-    struct event_t
+
+    struct Event
     {
         event_func_t func;
-        void*        data;
+        uintptr_t    data;
+
+        Event() {};
+        Event(event_func_t f) : func(f) {};
+        Event(event_func_t f, uintptr_t d) : func(f), data(d) {};
+
     };
 
     template <int SIZE>
@@ -118,20 +153,128 @@
     {
     public:
         /** Adds an event to the queue */
-        void queueEvent(event_func_t func, void* data) { events.push({ func, data}); }
-        void queueEvent(const event_t& event) { events.push(event); }
+        void queueEvent(event_func_t func)                 { cli(); events.push(Event(func)); sei(); }
+        void queueEvent(event_func_t func, uintptr_t data) { cli(); events.push({ func, data}); sei(); }
+        void queueEvent(const Event& event)                { events.push(event);         }
         void process()
         {
             while(events.isEmpty() == false)
             {
-                event_t event = events.pop();
+                Event event = events.pop();
                 event.func(event.data);
             }
         }
 
     private:
-        FIFO<event_t, SIZE> events;
+        FIFO<Event, SIZE> events;
     };
+
+    /**********************************************************
+     *
+     * Delayed Event processing (Timer Module)
+     *
+     **********************************************************/
+
+    /* The Timer Module uses policy based class design to implement
+       the actual details of the timer.  This is so that the timer code
+       can be optimised for the application required.
+
+       Timer Implementations should inherit from this base class
+    */
+    class TimerImplementationInterface
+    {
+    public:
+        /* tick() is called on every timer tick */
+        virtual void    tick(void) = 0;
+
+        /* add() is called to add a new timer */
+        virtual uint8_t add(uint16_t timeout, Event event) = 0;
+
+        /* remove() is called to remove a timer, using the handle returned by add */
+        virtual void    remove(uint8_t handle);
+        //virtual void    callback(callbackFunction f, void* userData) = 0;
+    };
+
+    /* 
+       Simple Timer Implmentation.  This maintains a list of
+       timers, which are decremented on each tick.  When the count is 0,
+       the callback is executed.
+    */
+
+    /* Struct to keep information on each timer */
+    struct TimerQueue_t
+    {
+        uint16_t ticks;     /* Ticks remaining             */
+        Event    event;     /* Event to activate on expiry */
+    };
+
+    template<int SIZE>
+    class SimpleTimerImplementation : public TimerImplementationInterface
+    {
+    public:
+        void    tick(void);
+        uint8_t add(uint16_t timeout, Event event);
+        void    remove(uint8_t handle);
+
+    private:
+        TimerQueue_t queue[SIZE];
+    };
+
+    template<int SIZE>
+    void SimpleTimerImplementation<SIZE>::tick(void)
+    {
+        //cout << "SimpleTimerImplementation::increment" << endl;
+        /* Go through all of the queue items.
+           Decrement them and call the callback if necessary.  */
+        for (uint8_t idx=0; idx<SIZE; idx+=1)
+        {
+            if (queue[idx].ticks > 0)
+            {
+                queue[idx].ticks -= 1;
+
+                if (queue[idx].ticks == 0)
+                {
+                    queue[idx].event.func(queue[idx].event.data);
+                    //this->callback(this->queue[idx].callback, this->queue[idx].userData);
+                    //cout << "callback " << idx << endl;
+                }
+            }
+        }
+    }
+
+
+    template<class T>
+    class Timer : public T
+    {
+        //virtual void callback(callbackFunction f, void* userData) { f(userData); };
+    };
+
+    template<int SIZE>
+    uint8_t SimpleTimerImplementation<SIZE>::add(uint16_t timeout, Event event)
+    {
+        //cout << "SimpleTimerImplementation::addEvent" << endl;
+
+        /* Go through the queue list, find a spare space for this item */
+        for (uint8_t idx=0; idx<SIZE; idx+=1)
+        {
+            if (queue[idx].ticks == 0)
+            {
+                queue[idx].ticks = timeout;
+                queue[idx].event = event;
+                return idx;
+            }
+        }
+
+        return 0xff; /* Invalid Handle */
+    }
+
+    template<int SIZE>
+    void SimpleTimerImplementation<SIZE>::remove(uint8_t handle)
+    {
+        static_assert(handle < SIZE, "");
+        queue[handle].ticks = 0;
+    }
+
 
 }
 #if 0
