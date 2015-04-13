@@ -12,6 +12,17 @@
  {
     /**********************************************************
      *
+     * Atomic
+     *
+     **********************************************************/
+
+    struct Atomic
+    {
+        Atomic()  { cli(); }
+        ~Atomic() { sei(); asm volatile ("" ::: "memory"); }
+    };
+    /**********************************************************
+     *
      * Useful storage classes
      *
      **********************************************************/
@@ -38,16 +49,36 @@
 
     public:
         /** Adds an item to the end of the queue */
-        void        push(const T& v) { inc(head);  array[head] = v; }
+        void        push(const T& v)
+        {
+            auto a = Atomic();
+            inc(head);
+            array[head] = v;
+        }
 
         /** Removes an item from the front of the queue */
-        const T&    pop()            { inc(tail);  return array[tail]; }
+        const T&    pop()
+        {
+            auto a = Atomic();
+            inc(tail);
+            return array[tail];
+        }
 
         /** Looks at the next item to be popped */
-        const T&    peek()           { uint8_t temp = tail; inc(temp); return array[temp]; }
+        const T&    peek()
+        {
+            auto a = Atomic();
+            uint8_t temp = tail;
+            inc(temp);
+            return array[temp];
+        }
 
         /** Checks to see if the buffer is empty */
-        uint8_t     isEmpty()        { return head == tail; }
+        uint8_t     isEmpty()
+        {
+            auto a = Atomic();
+            return head == tail;
+        }
 
         FIFO() : head(0), tail(0) {};
 
@@ -148,13 +179,21 @@
 
     };
 
+    class EventProcessorInterface
+    {
+        virtual void queueEvent(event_func_t func) =0;
+        virtual void queueEvent(event_func_t func, uintptr_t data) =0;
+        virtual void queueEvent(const Event& event) =0;
+        virtual void process() = 0;
+    };
+
     template <int SIZE>
-    class EventProcessor
+    class EventProcessor : public EventProcessorInterface
     {
     public:
         /** Adds an event to the queue */
-        void queueEvent(event_func_t func)                 { cli(); events.push(Event(func)); sei(); }
-        void queueEvent(event_func_t func, uintptr_t data) { cli(); events.push({ func, data}); sei(); }
+        void queueEvent(event_func_t func)                 { events.push(Event(func));   }
+        void queueEvent(event_func_t func, uintptr_t data) { events.push({ func, data}); }
         void queueEvent(const Event& event)                { events.push(event);         }
         void process()
         {
@@ -192,7 +231,7 @@
 
         /* remove() is called to remove a timer, using the handle returned by add */
         virtual void    remove(uint8_t handle);
-        //virtual void    callback(callbackFunction f, void* userData) = 0;
+        
     };
 
     /* 
@@ -212,36 +251,57 @@
     class SimpleTimerImplementation : public TimerImplementationInterface
     {
     public:
-        void    tick(void);
-        uint8_t add(uint16_t timeout, Event event);
-        void    remove(uint8_t handle);
+        /* Constructor */
+        SimpleTimerImplementation(EventProcessorInterface* p) : processor(p) {};
 
-    private:
-        TimerQueue_t queue[SIZE];
-    };
-
-    template<int SIZE>
-    void SimpleTimerImplementation<SIZE>::tick(void)
-    {
-        //cout << "SimpleTimerImplementation::increment" << endl;
-        /* Go through all of the queue items.
-           Decrement them and call the callback if necessary.  */
-        for (uint8_t idx=0; idx<SIZE; idx+=1)
+        /* tick() adds a timer event to the queue */
+        void tick(void)
         {
-            if (queue[idx].ticks > 0)
+            auto a = Atomic();
+            /* Go through all of the queue items.
+               Decrement them and call the callback if necessary.  */
+            for (uint8_t idx=0; idx<SIZE; idx+=1)
             {
-                queue[idx].ticks -= 1;
-
-                if (queue[idx].ticks == 0)
+                if (queue[idx].ticks > 0)
                 {
-                    queue[idx].event.func(queue[idx].event.data);
-                    //this->callback(this->queue[idx].callback, this->queue[idx].userData);
-                    //cout << "callback " << idx << endl;
+                    queue[idx].ticks -= 1;
+
+                    if (queue[idx].ticks == 0)
+                    {
+                        processor->queueEvent({queue[idx].func, queue[idx].data});
+                    }
                 }
             }
         }
-    }
 
+        /* add an event to be timed */
+        uint8_t add(uint16_t timeout, Event event)
+        {
+            auto a = Atomic();
+            for (uint8_t idx=0; idx<SIZE; idx+=1)
+            {
+                if (queue[idx].ticks == 0)
+                {
+                    queue[idx].ticks = timeout;
+                    queue[idx].event = event;
+                    return idx;
+                }
+            }
+
+            return 0xff; /* Invalid Handle */
+        }
+
+        /* Remove handle from the list */
+        void    remove(uint8_t handle)
+        {
+            auto a = Atomic();
+            queue[handle].ticks = 0;
+        }
+
+    private:
+        TimerQueue_t queue[SIZE];
+        EventProcessorInterface* processor;
+    };
 
     template<class T>
     class Timer : public T
@@ -249,34 +309,26 @@
         //virtual void callback(callbackFunction f, void* userData) { f(userData); };
     };
 
-    template<int SIZE>
-    uint8_t SimpleTimerImplementation<SIZE>::add(uint16_t timeout, Event event)
-    {
-        //cout << "SimpleTimerImplementation::addEvent" << endl;
+}
+/*
+static __inline__ uint8_t __iCliRetVal(void)
+{
+    cli();
+    return 1;
+}
 
-        /* Go through the queue list, find a spare space for this item */
-        for (uint8_t idx=0; idx<SIZE; idx+=1)
-        {
-            if (queue[idx].ticks == 0)
-            {
-                queue[idx].ticks = timeout;
-                queue[idx].event = event;
-                return idx;
-            }
-        }
+#define ATOMIC_RESTORESTATE uint8_t sreg_save \
+        __attribute__((__cleanup__(__iRestore))) = SREG
 
-        return 0xff; /* Invalid Handle */
-    }
+#define ATOMIC_BLOCK(type) for ( type, __ToDo = __iCliRetVal(); \
+                               __ToDo ; __ToDo = 0 )
 
-    template<int SIZE>
-    void SimpleTimerImplementation<SIZE>::remove(uint8_t handle)
-    {
-        static_assert(handle < SIZE, "");
-        queue[handle].ticks = 0;
-    }
 
+for (uint8_t sreg_save = SREG, __ToDo = cli(); __ToDo; __ToDo = 0)
+{
 
 }
+*/
 #if 0
 class ProcessInterface
 {

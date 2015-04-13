@@ -133,6 +133,10 @@ int main(void)
 	ReceiveChar rec('a');
 	rec.fire();
 */
+
+	auto timer = stedos::SimpleTimerImplementation<12>(&queue);
+	timer.add(100, {data_received});
+
 	setup_rs232();
 	sei();
 
