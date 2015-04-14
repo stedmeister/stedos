@@ -181,6 +181,7 @@
 
     class EventProcessorInterface
     {
+    public:
         virtual void queueEvent(event_func_t func) =0;
         virtual void queueEvent(event_func_t func, uintptr_t data) =0;
         virtual void queueEvent(const Event& event) =0;
@@ -268,7 +269,7 @@
 
                     if (queue[idx].ticks == 0)
                     {
-                        processor->queueEvent({queue[idx].func, queue[idx].data});
+                        processor->queueEvent(queue[idx].event);
                     }
                 }
             }
