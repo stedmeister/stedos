@@ -14,6 +14,9 @@
      *
      * Atomic
      *
+     * This class is used to disable and enable interrupts
+     * It disables them on creation and enables them on destruction
+     *
      **********************************************************/
 
     struct Atomic
@@ -21,6 +24,162 @@
         Atomic()  { cli(); }
         ~Atomic() { sei(); asm volatile ("" ::: "memory"); }
     };
+
+
+    /**********************************************************
+     *
+     * Port Access
+     *
+     * These functions are used for accessing IO ports
+     **********************************************************/
+
+     namespace _internal
+     {
+
+        /* Define the list of port addresses
+           This is an indexable list of addresses, that is
+           filled in based on the hardware ports that
+           are available on the AVR.
+           If the relevant #define exist, then the table
+           entry is populated with the appropriate address.
+           If the relevant #define does not exist, then
+           the entry is NULL.
+        */
+        volatile uint8_t* const port_table[] = 
+        {
+            #ifdef PORTA
+                &PORTA,   
+            #else    
+                0,    
+            #endif
+            #ifdef PORTB  
+                &PORTB,   
+            #else    
+                0, 
+            #endif
+            #ifdef PORTC
+                &PORTC,   
+            #else    
+                0,    
+            #endif
+            #ifdef PORTD
+                &PORTD,   
+            #else    
+                0, 
+            #endif
+            #ifdef PORTE
+                &PORTE,   
+            #else    
+                0,  
+            #endif
+            #ifdef PORTF
+                &PORTF,   
+            #else    
+                0,    
+            #endif
+            #ifdef PORTG
+                &PORTG,   
+            #else    
+                0,
+            #endif
+        };
+
+        /* Here we define the class that controls access to the
+           port.  It takes a template argument as the index to
+           the port address.  */
+        template<int PORT_ID>
+        struct port
+        {
+            volatile uint8_t* const address = port_table[PORT_ID];
+            uint8_t operator |= (uint8_t v) { return *address |= v; }
+            uint8_t operator &= (uint8_t v) { return *address &= v; }
+            uint8_t read() const { return *address; }
+            void write(uint8_t v) { *address = v; }
+        };
+    }
+
+
+    /* Finally we define our own class instances to access
+       each port.  These will only be defined if the relevant 
+       #define exists.  This is what should be used to access
+       the ports.  */
+
+    #ifdef PORTA
+      using port_a = _internal::port<0>;
+    #endif
+    #ifdef PORTB
+      using port_b = _internal::port<1>;
+    #endif
+    #ifdef PORTC
+      using port_c = _internal::port<2>;
+    #endif
+    #ifdef PORTD
+      using port_d = _internal::port<3>;
+    #endif
+    #ifdef PORTE
+      using port_e = _internal::port<4>;
+    #endif
+    #ifdef PORTF
+      using port_f = _internal::port<5>;
+    #endif
+    #ifdef PORTG
+      using port_g = _internal::port<6>;
+    #endif
+
+
+    /* The IO class is used to actually communicate with
+        a number (or one) of pins */
+
+    template <typename PORT, int OFFSET, int LENGTH=1>
+    struct IO
+    {
+        static_assert(LENGTH >  0, "");
+        static_assert(LENGTH <= 8, "");
+        static_assert(OFFSET <  8, "");
+        static_assert((OFFSET + LENGTH) <= 8, "");
+
+        static const uint8_t MASK = ((1 << LENGTH) - 1) << OFFSET;
+        PORT port;
+
+        /* Sets all the bits to high */
+        void set()          { port |=  MASK; }
+
+        /* set(value) will set the port to the supplied value
+         * if LENGTH = 1, then a non zero value will set the bit
+         */
+        void set(const uint8_t& v)
+        {
+            /* Specialisation for single bit ports */
+            if (LENGTH == 1)
+            {
+                if(v) set(); else clr();
+            }
+            else
+            {
+                uint8_t temp = port.read();     /* read the port value              */
+                temp &= ~MASK;                  /* clear out the bits we care about */
+                temp |= (v << OFFSET);          /* mask in v shifted by OFFSET      */
+                port.write(temp);               /* finally write back the value     */
+            }
+        }
+
+        /* Sets all of the bits to low */
+        void clr()      { port &= ~MASK; }
+
+        /* Inverts all of the bits */
+        void toggle()   { port ^=  MASK; }
+
+        /* toggles the bits using the supplied mask */
+        void toggle(const uint8_t& m)  {  port ^= (m << OFFSET);   }
+
+        /* returns the value of the IO pins */
+        const uint8_t& read()
+        {
+            return (port.read() & MASK) >> OFFSET; 
+        }
+
+    };
+
     /**********************************************************
      *
      * Useful storage classes
