@@ -469,6 +469,52 @@
         //virtual void callback(callbackFunction f, void* userData) { f(userData); };
     };
 
+    /**********************************************************
+     *
+     * Debug
+     *
+     * Debugging is useful, however, it can be quite hard on
+     * microprocessors due to their limited resources.  The
+     * debug class provides a null implementation for a number
+     * of debug functions.  To get debug out of the class, this
+     * class should be subclassed and the required functionality
+     * provided.
+     *
+     **********************************************************/
+
+    struct Debug
+    {
+        /* This function should be called when something bad has happened */
+        void assert() {};
+
+        /* The folowing functions are used to output debug messages.  The
+           debug levels are used as follows:
+
+           * info  - general purpose information
+           * warn  - warning (something might not be right)
+           * error - a recoverable error has occurred
+           * fatal - something very bad has happened
+        */ 
+
+        /* Adjust the level of the output */
+        void setLevel(const uint8_t& l) { level = l; }
+
+        /* This function is used to output a debug string */
+        virtual void log(const uint8_t& level, const char& output)  {}
+
+        Debug(const uint8_t& l=3) : level(l) {};
+
+    private:
+        uint8_t level;
+
+    };
+
+    #define LEVEL_TRACE (4)
+    #define LEVEL_INFO  (3)
+    #define LEVEL_WARN  (2)
+    #define LEVEL_ERROR (1)
+    #define LEVEL_FATAL (0)
+
 }
 /*
 static __inline__ uint8_t __iCliRetVal(void)
