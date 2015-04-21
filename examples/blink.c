@@ -31,7 +31,7 @@
 /* Create a variable to represent the LED
    we are using the same pin that the
    arduino uses for its LED for simplicity */
-stedos::IO<stedos::port_b, 0> led;
+stedos::IO<stedos::port_b, 5> led;
 
 /* Create a process queue to handle events,
    because we only have a few events to process,
@@ -47,7 +47,7 @@ auto timer = stedos::SimpleTimerImplementation<1>(&queue);
    used, the prototype must match */
 void toggle_led(uintptr_t data)
 {
-	led.toggle();                     // toggle the LED
+    led.toggle();                     // toggle the LED
     timer.add(500, {toggle_led, 0});  // readd the wait
 }
 
@@ -56,34 +56,34 @@ void toggle_led(uintptr_t data)
    of our program.  */
 int main (void)
 {
-	/* Setup timer0 to interrupt every 500ms */
-	TCCR0A = 0;             // CTC mode no pin outputs
-	TCCR0B = 0x03;  // CLKDIV / 64
-	TCNT0 = 250;                      // Interrupt every 1ms
-	TIMSK0 |= _BV(TOIE0);             // Enable overflow interrupt
+    /* Setup timer0 to interrupt every 500ms */
+    TCCR0A = 0x00;        // CTC mode no pin outputs
+    TCCR0B = 0x03;        // CLKDIV / 64
+    TCNT0  = 250;         // Interrupt every 1ms
+    TIMSK0 |= _BV(TOIE0); // Enable overflow interrupt
 
-	DDRB = 0xff;
+    DDRB = 0xff;
 
-	sei();
+    sei();
 
-	/* Add the timer callback to expire every 500 ms */
-	timer.add(500, {toggle_led, 0});
+    /* Add the timer callback to expire every 500 ms */
+    timer.add(500, {toggle_led, 0});
 
-	/* finally start the process queue */
-	while(1)
-	{
-		queue.process();
-	}
+    /* finally start the process queue */
+    while(1)
+    {
+        queue.process();
+    }
 
-	return 0;
+    return 0;
 
 }
 
 /* Finally plumb in the interrupt */
 ISR(TIMER0_OVF_vect)
 {
-	/* Call the timer's tick function */
-	timer.tick();
+    /* Call the timer's tick function */
+    timer.tick();
 
 }
 
