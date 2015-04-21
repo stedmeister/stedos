@@ -33,6 +33,15 @@
      * These functions are used for accessing IO ports
      **********************************************************/
 
+    enum port_mode
+    {
+        PORT_MODE_UNDEFINED,
+        PORT_MODE_OUTPUT,
+        PORT_MODE_INPUT,
+        PORT_MODE_INPUT_PULLUP,
+        PORT_MODE_LAST
+    };
+
      namespace _internal
      {
 
@@ -45,44 +54,55 @@
            If the relevant #define does not exist, then
            the entry is NULL.
         */
-        volatile uint8_t* const port_table[] = 
+
+        struct io_registers
+        {
+            volatile uint8_t* const port;
+            volatile uint8_t* const pin;
+            volatile uint8_t* const ddr;
+        };
+
+        const io_registers register_table[] = 
         {
             #ifdef PORTA
-                &PORTA,   
+                { &PORTA, &PINA, &DDRA },   
             #else    
-                0,    
+                { 0, 0, 0 },    
             #endif
             #ifdef PORTB  
-                &PORTB,   
+                { &PORTB, &PINB, &DDRB },   
             #else    
-                0, 
+                { 0, 0, 0},
             #endif
             #ifdef PORTC
-                &PORTC,   
+                { &PORTC, &PINC, &DDRC },   
             #else    
-                0,    
+                { 0, 0, 0},    
             #endif
             #ifdef PORTD
-                &PORTD,   
+                { &PORTD, &PIND, &DDRD },
             #else    
-                0, 
+                { 0, 0, 0}, 
             #endif
             #ifdef PORTE
-                &PORTE,   
+                { &PORTE, &PINE, &DDRE },
             #else    
-                0,  
+                { 0, 0, 0},  
             #endif
             #ifdef PORTF
-                &PORTF,   
+                { &PORTF, &PINF, &DDRF },
             #else    
-                0,    
+                { 0, 0, 0},
             #endif
             #ifdef PORTG
-                &PORTG,   
+                { &PORTG, &PING, &DDRG },
             #else    
-                0,
+                { 0, 0, 0},
             #endif
         };
+
+        /* Enum used to control the input / output mode
+           of teh port */
 
         /* Here we define the class that controls access to the
            port.  It takes a template argument as the index to
@@ -90,12 +110,31 @@
         template<int PORT_ID>
         struct port
         {
-            volatile uint8_t* const address = port_table[PORT_ID];
-            uint8_t operator |= (uint8_t v) { return *address |= v; }
-            uint8_t operator &= (uint8_t v) { return *address &= v; }
-            uint8_t operator ^= (uint8_t v) { return *address ^= v; }
-            uint8_t read() const { return *address; }
-            void write(uint8_t v) { *address = v; }
+            //volatile uint8_t* const address = port_table[PORT_ID];
+            const io_registers registers = register_table[PORT_ID];
+            uint8_t operator |= (uint8_t v) { return *registers.port |= v; }
+            uint8_t operator &= (uint8_t v) { return *registers.port &= v; }
+            uint8_t read() const { return *registers.pin; }
+            void toggle(const uint8_t& v) { *registers.pin = v; }
+            void write(const uint8_t& v) { *registers.port = v; }
+
+            void setMode(const port_mode& mode, const uint8_t& mask)
+            {
+                if (mode == PORT_MODE_OUTPUT)
+                {
+                    *registers.ddr |= mask;
+                }
+                else if (mode == PORT_MODE_INPUT_PULLUP)
+                {
+                    *registers.ddr &= ~mask;
+                    *registers.port |= mask;
+                }
+                else
+                {
+                    *registers.ddr &= ~mask;
+                    *registers.port &= ~mask;
+                }
+            }
         };
     }
 
@@ -127,7 +166,6 @@
       using port_g = _internal::port<6>;
     #endif
 
-
     /* The IO class is used to actually communicate with
         a number (or one) of pins */
 
@@ -141,6 +179,12 @@
 
         static const uint8_t MASK = ((1 << LENGTH) - 1) << OFFSET;
         PORT port;
+
+        /* Set the pin mode */
+        void setMode(const port_mode& mode)
+        {
+            port.setMode(mode, MASK);
+        }
 
         /* Sets all the bits to high */
         void set()          { port |=  MASK; }
@@ -168,10 +212,10 @@
         void clr()      { port &= ~MASK; }
 
         /* Inverts all of the bits */
-        void toggle()   { port ^=  MASK; }
+        void toggle()   { port.toggle(MASK); }
 
         /* toggles the bits using the supplied mask */
-        void toggle(const uint8_t& m)  {  port ^= (m << OFFSET);   }
+        void toggle(const uint8_t& m)  {  port.toggle(m << OFFSET);   }
 
         /* returns the value of the IO pins */
         const uint8_t& read()

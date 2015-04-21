@@ -64,7 +64,8 @@ int main (void)
 
     DDRB = 0xff;
 
-    sei();
+    //sei();
+    led.setMode(stedos::PORT_MODE_OUTPUT);
 
     /* Add the timer callback to expire every 500 ms */
     timer.add(500, {toggle_led, 0});
