@@ -4,6 +4,10 @@
  *
  * This example will blink an LED at 1Hz
  *
+ * compile    : avr-g++ -Os -mmcu=atmega328p -std=c++11  blink.c -o blink
+ * create hex : avr-objcopy -O ihex blink blink.hex
+ * program    : avrdude -p atmega328p -c arduino -P /dev/tty.usbmodem1411 -U flash:w:blink.hex -v
+ *
  *****************************************************/
 
 /* Make sure that the oscillator frequency of the
