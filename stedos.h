@@ -93,6 +93,7 @@
             volatile uint8_t* const address = port_table[PORT_ID];
             uint8_t operator |= (uint8_t v) { return *address |= v; }
             uint8_t operator &= (uint8_t v) { return *address &= v; }
+            uint8_t operator ^= (uint8_t v) { return *address ^= v; }
             uint8_t read() const { return *address; }
             void write(uint8_t v) { *address = v; }
         };
@@ -368,6 +369,8 @@
         FIFO<Event, SIZE> events;
     };
 
+    extern "C" void __cxa_pure_virtual() { while (1); }
+
     /**********************************************************
      *
      * Delayed Event processing (Timer Module)
@@ -390,7 +393,7 @@
         virtual uint8_t add(uint16_t timeout, Event event) = 0;
 
         /* remove() is called to remove a timer, using the handle returned by add */
-        virtual void    remove(uint8_t handle);
+        virtual void    remove(uint8_t handle) = 0;
         
     };
 
